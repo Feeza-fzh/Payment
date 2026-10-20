@@ -228,35 +228,38 @@ export async function fulfillEntitlement(
         },
       });
 
-      // 3. Update User.plan and CheckoutSession
-      await tx.user.update({
-        where: { id: session.userId },
-        data: { plan: appliedPlanTier },
-      });
-
-      await tx.checkoutSession.update({
-        where: { id: session.id },
-        data: {
-          status: CheckoutStatus.COMPLETED,
-          providerTransactionId: payment.providerTransactionId,
-        },
-      });
-
-      // 4. Write PLAN_APPLIED SubscriptionEvent (Rule P-18)
-      await writeSubscriptionEvent(
-        {
-          idempotencyKey: `sub:apply:${payment.providerTransactionId}`,
-          userId: session.userId,
-          type: SubscriptionEventType.PLAN_APPLIED,
-        },
-        tx
-      );
+      // 3. Concurrently update User.plan, CheckoutSession, and write SubscriptionEvent (Rule P-18)
+      await Promise.all([
+        tx.user.update({
+          where: { id: session.userId },
+          data: { plan: appliedPlanTier },
+        }),
+        tx.checkoutSession.update({
+          where: { id: session.id },
+          data: {
+            status: CheckoutStatus.COMPLETED,
+            providerTransactionId: payment.providerTransactionId,
+          },
+        }),
+        writeSubscriptionEvent(
+          {
+            idempotencyKey: `sub:apply:${payment.providerTransactionId}`,
+            userId: session.userId,
+            type: SubscriptionEventType.PLAN_APPLIED,
+          },
+          tx
+        ),
+      ]);
 
       return {
         ok: true,
         outcome: fulfillOutcome,
         plan: appliedPlanTier,
       };
+    },
+    {
+      maxWait: 15000,
+      timeout: 30000,
     });
 
     return txResult;

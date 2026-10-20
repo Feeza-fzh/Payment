@@ -49,6 +49,9 @@ export async function cancelSubscription(params: {
       },
       tx
     );
+  }, {
+    maxWait: 10000,
+    timeout: 20000,
   });
 
   return { ok: true, endsAt: sub.currentPeriodEnd };
