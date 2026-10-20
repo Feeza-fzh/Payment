@@ -1,0 +1,131 @@
+/* ==========================================================================
+   ShellHeader — FR-1
+   Signed-in shell: brand, nav (Plans / Billing), user avatar + email + badge.
+   All values come from design-tokens.css custom properties.
+   ========================================================================== */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-base) var(--spacing-very-large);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-surface-variant);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+/* Brand */
+.brand {
+  font: var(--font-title-large);
+  letter-spacing: var(--font-title-large-letter-spacing);
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+/* Nav */
+.nav {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-extra-large);
+}
+
+.navLink {
+  font: var(--font-label-large);
+  letter-spacing: var(--font-label-large-letter-spacing);
+  color: var(--color-on-surface-variant);
+  text-decoration: none;
+  padding: var(--spacing-small) var(--spacing-no);
+  position: relative;
+  transition: color 0.2s ease;
+}
+
+.navLink:hover {
+  color: var(--color-primary);
+}
+
+.navLinkActive {
+  color: var(--color-primary);
+}
+
+.navLinkActive::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--color-primary);
+  border-radius: 1px;
+}
+
+/* User area */
+.user {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-medium);
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-primary-container);
+  color: var(--color-on-primary-container);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: var(--font-label-large);
+  letter-spacing: var(--font-label-large-letter-spacing);
+  flex-shrink: 0;
+}
+
+.userInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.email {
+  font: var(--font-body-small);
+  letter-spacing: var(--font-body-small-letter-spacing);
+  color: var(--color-on-surface);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--spacing-small);
+  border-radius: 10px;
+  font: var(--font-label-small);
+  letter-spacing: var(--font-label-small-letter-spacing);
+  width: fit-content;
+}
+
+.badgeFree {
+  background: var(--color-surface-variant);
+  color: var(--color-on-surface-variant);
+}
+
+.badgePaid {
+  background: var(--color-primary-container);
+  color: var(--color-on-primary-container);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .header {
+    padding: var(--spacing-medium) var(--spacing-base);
+  }
+
+  .nav {
+    gap: var(--spacing-base);
+  }
+}
+
+@media (max-width: 480px) {
+  .userInfo {
+    display: none;
+  }
+}

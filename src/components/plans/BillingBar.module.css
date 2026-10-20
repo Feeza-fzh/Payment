@@ -1,0 +1,92 @@
+/* ==========================================================================
+   BillingBar — FR-12 summary strip
+   All values come from design-tokens.css custom properties.
+   ========================================================================== */
+
+.bar {
+  width: 100%;
+  max-width: 960px;
+  margin-top: var(--spacing-very-large);
+  padding: var(--spacing-large) var(--spacing-extra-large);
+  background: var(--color-surface-c-low);
+  border: 1px solid var(--color-surface-variant);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-extra-large);
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.label {
+  font: var(--font-label-small);
+  letter-spacing: var(--font-label-small-letter-spacing);
+  color: var(--color-on-surface-variant);
+  text-transform: uppercase;
+}
+
+.value {
+  font: var(--font-title-small);
+  letter-spacing: var(--font-title-small-letter-spacing);
+  color: var(--color-on-surface);
+}
+
+.statusValue {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-extra-small);
+  font: var(--font-title-small);
+  letter-spacing: var(--font-title-small-letter-spacing);
+  color: var(--color-on-surface);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dotActive {
+  background: #2e7d32;
+}
+
+.dotPastDue {
+  background: #c62828;
+}
+
+.dotFree {
+  background: var(--color-on-surface-variant);
+}
+
+.manageLink {
+  font: var(--font-label-large);
+  letter-spacing: var(--font-label-large-letter-spacing);
+  padding: var(--spacing-small) var(--spacing-base);
+  border-radius: 10px;
+  border: 1px solid var(--color-surface-variant);
+  background: var(--color-surface);
+  color: var(--color-on-surface-variant);
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.manageLink:hover {
+  border-color: var(--color-on-surface-variant);
+  color: var(--color-on-surface);
+}
+
+@media (max-width: 768px) {
+  .bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-base);
+  }
+}

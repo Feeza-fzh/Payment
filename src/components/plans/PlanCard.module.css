@@ -1,0 +1,200 @@
+/* ==========================================================================
+   PlanCard — FR-2, PRD §5.2 CTA matrix
+   All values come from design-tokens.css custom properties.
+   ========================================================================== */
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-surface-variant);
+  border-radius: 16px;
+  padding: var(--spacing-very-large) var(--spacing-extra-large);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.card:hover {
+  border-color: var(--color-surface-c-highest);
+  box-shadow: var(--shadow-soft);
+}
+
+.cardRecommended {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-soft);
+}
+
+.cardRecommended:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-soft);
+}
+
+.cardCurrent {
+  background: var(--color-surface-c-lowest);
+  border-color: var(--color-primary-container);
+}
+
+/* Recommended badge */
+.badge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--spacing-extra-small) var(--spacing-medium);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font: var(--font-label-small);
+  letter-spacing: var(--font-label-small-letter-spacing);
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+/* Header */
+.header {
+  margin-bottom: var(--spacing-large);
+}
+
+.tier {
+  font: var(--font-title-medium);
+  letter-spacing: var(--font-title-medium-letter-spacing);
+  color: var(--color-on-surface-variant);
+  margin-bottom: var(--spacing-extra-small);
+}
+
+.price {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-extra-small);
+}
+
+.currency {
+  font: var(--font-title-medium);
+  letter-spacing: var(--font-title-medium-letter-spacing);
+  color: var(--color-on-surface);
+}
+
+.amount {
+  font: var(--font-heading-large);
+  letter-spacing: var(--font-heading-large-letter-spacing);
+  color: var(--color-on-surface);
+}
+
+.interval {
+  font: var(--font-body-small);
+  letter-spacing: var(--font-body-small-letter-spacing);
+  color: var(--color-on-surface-variant);
+  align-self: flex-end;
+  margin-bottom: 6px;
+}
+
+/* Description */
+.description {
+  font: var(--font-body-medium);
+  letter-spacing: var(--font-body-medium-letter-spacing);
+  color: var(--color-on-surface-variant);
+  margin-bottom: var(--spacing-large);
+  min-height: 42px;
+}
+
+/* Divider */
+.divider {
+  height: 1px;
+  background: var(--color-surface-variant);
+  margin-bottom: var(--spacing-large);
+}
+
+/* Features */
+.features {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-medium);
+  margin-bottom: var(--spacing-extra-large);
+  flex: 1;
+}
+
+.feature {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-small);
+  font: var(--font-body-medium);
+  letter-spacing: var(--font-body-medium-letter-spacing);
+  color: var(--color-on-surface-variant);
+}
+
+.featureIcon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.featureIconCheck {
+  background: var(--color-primary-container);
+  color: var(--color-on-primary-container);
+}
+
+.featureIconDash {
+  background: var(--color-surface-variant);
+  color: var(--color-on-surface-variant);
+}
+
+/* CTA button — §5.2 matrix variants */
+.cta {
+  font: var(--font-label-large);
+  letter-spacing: var(--font-label-large-letter-spacing);
+  padding: var(--spacing-medium) var(--spacing-extra-large);
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  text-align: center;
+  transition: opacity 0.2s ease, box-shadow 0.2s ease;
+  display: block;
+  width: 100%;
+}
+
+.ctaPrimary {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.ctaPrimary:hover {
+  opacity: 0.9;
+  box-shadow: var(--shadow-medium);
+}
+
+.ctaSecondary {
+  background: var(--color-primary-container);
+  color: var(--color-on-primary-container);
+}
+
+.ctaSecondary:hover {
+  opacity: 0.85;
+}
+
+.ctaCurrent {
+  background: var(--color-surface-c-high);
+  color: var(--color-on-surface-variant);
+  cursor: default;
+}
+
+.ctaDisabled {
+  background: var(--color-surface-c-high);
+  color: var(--color-on-surface-variant);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.ctaScheduled {
+  background: var(--color-surface-variant);
+  color: var(--color-on-surface-variant);
+  font: var(--font-label-medium);
+  letter-spacing: var(--font-label-medium-letter-spacing);
+  cursor: default;
+}
