@@ -1,0 +1,200 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PlanTier {
+  FREE
+  MONTHLY
+  YEARLY
+}
+
+enum Interval {
+  MONTH
+  YEAR
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  ENDED
+}
+
+enum CheckoutKind {
+  NEW
+  UPGRADE
+  RENEWAL
+}
+
+enum CheckoutStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  EXPIRED
+}
+
+enum PaymentEventType {
+  INITIATION
+  VERIFICATION
+  FULFILMENT
+  FAILURE
+}
+
+enum EventSource {
+  CHECKOUT
+  WEBHOOK
+  RETURN
+  RENEWAL_JOB
+}
+
+enum CancellationReasonCode {
+  TOO_EXPENSIVE
+  MISSING_FEATURES
+  NOT_USING
+  FOUND_ALTERNATIVE
+  OTHER
+}
+
+enum PaymentOutcome {
+  SUCCESS
+  PENDING
+  SIGNATURE_INVALID
+  AMOUNT_MISMATCH
+  CURRENCY_MISMATCH
+  VERIFY_TIMEOUT
+  USER_CANCELLED
+  PROVIDER_ERROR
+  UPGRADE_PERIOD_DRIFT
+  PAID_EXPIRED_SESSION
+  DUPLICATE_PAYMENT
+  UNMATCHED_REFERENCE
+  RENEWAL_AFTER_CANCEL
+}
+
+enum SubscriptionEventType {
+  CANCEL_REQUESTED
+  DOWNGRADE_SCHEDULED
+  CHANGE_UNDONE
+  PERIOD_ENDED
+  GRACE_STARTED
+  PLAN_APPLIED
+}
+
+model User {
+  id                 String              @id @default(cuid())
+  email              String              @unique
+  plan               PlanTier            @default(FREE)
+  createdAt          DateTime            @default(now())
+  subscription       Subscription?
+  checkoutSessions   CheckoutSession[]
+  paymentLogs        PaymentLog[]
+  subscriptionEvents SubscriptionEvent[]
+}
+
+model Plan {
+  id               String            @id @default(cuid())
+  tier             PlanTier          @unique
+  interval         Interval?
+  amountMinor      Int
+  currency         String            @db.Char(3)
+  active           Boolean           @default(true)
+  subscriptions    Subscription[]    @relation("CurrentPlan")
+  pendingFor       Subscription[]    @relation("PendingPlan")
+  checkoutSessions CheckoutSession[]
+}
+
+model Subscription {
+  id                     String                  @id @default(cuid())
+  userId                 String                  @unique
+  user                   User                    @relation(fields: [userId], references: [id])
+  planId                 String
+  plan                   Plan                    @relation("CurrentPlan", fields: [planId], references: [id])
+  status                 SubscriptionStatus
+  currentPeriodStart     DateTime
+  currentPeriodEnd       DateTime
+  cancelAtPeriodEnd      Boolean                 @default(false)
+  pendingPlanId          String?
+  pendingPlan            Plan?                   @relation("PendingPlan", fields: [pendingPlanId], references: [id])
+  graceEndsAt            DateTime?
+  canceledAt             DateTime?
+  cancellationReasonCode CancellationReasonCode?
+  cancellationReasonText String?                 @db.VarChar(500)
+  cardTokenEncrypted     String?
+  lastAmountMinor        Int
+  currency               String                  @db.Char(3)
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+
+  @@index([status, currentPeriodEnd])
+  @@index([graceEndsAt])
+}
+
+model CheckoutSession {
+  id                    String         @id @default(cuid())
+  userId                String
+  user                  User           @relation(fields: [userId], references: [id])
+  targetPlanId          String
+  targetPlan            Plan           @relation(fields: [targetPlanId], references: [id])
+  kind                  CheckoutKind
+  txRef                 String         @unique
+  providerTransactionId String?        @unique
+  amountMinor           Int
+  currency              String         @db.Char(3)
+  prorationCreditMinor  Int?
+  quotedPeriodStart     DateTime?
+  quotedPeriodEnd       DateTime?
+  status                CheckoutStatus @default(PENDING)
+  paymentLink           String?
+  expiresAt             DateTime
+  createdAt             DateTime       @default(now())
+  paymentLogs           PaymentLog[]
+
+  @@index([userId, targetPlanId, status])
+}
+
+model PaymentLog {
+  id                    String           @id @default(cuid())
+  idempotencyKey        String           @unique
+  eventType             PaymentEventType
+  source                EventSource
+  userId                String?
+  user                  User?            @relation(fields: [userId], references: [id])
+  checkoutSessionId     String?
+  checkoutSession       CheckoutSession? @relation(fields: [checkoutSessionId], references: [id])
+  providerRef           String
+  providerTransactionId String?
+  amountMinor           Int?
+  currency              String?          @db.Char(3)
+  outcome               PaymentOutcome
+  payload               Json
+  createdAt             DateTime         @default(now())
+
+  @@index([providerRef])
+  @@index([userId, createdAt])
+  @@index([eventType, createdAt])
+}
+
+model SubscriptionEvent {
+  id             String                  @id @default(cuid())
+  idempotencyKey String                  @unique
+  userId         String
+  user           User                    @relation(fields: [userId], references: [id])
+  type           SubscriptionEventType
+  reasonCode     CancellationReasonCode?
+  reasonText     String?                 @db.VarChar(500)
+  createdAt      DateTime                @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model RateLimitHit {
+  id  String   @id @default(cuid())
+  key String
+  at  DateTime @default(now())
+
+  @@index([key, at])
+}

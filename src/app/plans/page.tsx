@@ -7,6 +7,8 @@ import type {
   EffectivePlan,
 } from "@/components/plans/types";
 import styles from "./PlansPage.module.css";
+import { getCurrentUser } from "@/server/identity/getCurrentUser";
+import { effectivePlan } from "@/server/identity/effectivePlan";
 
 export const metadata: Metadata = {
   title: "Plans — SubSlice",
@@ -102,16 +104,16 @@ export default async function PlansPage(
   const searchParams = props.searchParams ? await props.searchParams : undefined;
   const errorMessage = searchParams?.error;
 
-  // Phase 1 placeholder — replaced by getCurrentUser() + effectivePlan() (FR-1)
-  const email = "ada@example.com";
-  const effectivePlan: EffectivePlan = "FREE";
+  const user = await getCurrentUser();
+  const activeEffectivePlan: EffectivePlan = effectivePlan(user);
+  const email = user?.email ?? "ada@example.com";
 
   return (
     <>
       {/* FR-1: Shell with email, plan badge, nav */}
       <ShellHeader
         email={email}
-        effectivePlan={effectivePlan}
+        effectivePlan={activeEffectivePlan}
         activePage="plans"
       />
 
@@ -154,7 +156,7 @@ export default async function PlansPage(
             <div key={plan.tier} role="listitem" className={styles.cardWrapper}>
               <PlanCard
                 plan={plan}
-                cta={resolveCta(plan.tier, effectivePlan)}
+                cta={resolveCta(plan.tier, activeEffectivePlan)}
                 recommended={plan.tier === "YEARLY"}
               />
             </div>
