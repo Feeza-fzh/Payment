@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { effectivePlan } from "@/server/identity/effectivePlan";
-import { setClockForTesting, getClock } from "@/server/clock";
+import { setClockForTesting } from "@/server/clock";
 import type { Clock } from "@/server/clock";
 
 class MockClock implements Clock {

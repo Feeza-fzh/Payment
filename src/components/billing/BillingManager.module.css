@@ -1,0 +1,236 @@
+/* ==========================================================================
+   BillingManager — FR-11 to FR-16, FR-19, FR-21
+   CSS Modules using tokens from design-tokens.css
+   ========================================================================== */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-extra-large);
+}
+
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-surface-variant);
+  border-radius: 16px;
+  padding: var(--spacing-very-large);
+  box-shadow: var(--shadow-soft);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-large);
+  flex-wrap: wrap;
+  gap: var(--spacing-base);
+}
+
+.title {
+  font: var(--font-heading-small);
+  color: var(--color-on-surface);
+  margin: 0;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font: var(--font-label-small);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.statusActive {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.statusPastDue {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.statusEnded {
+  background: rgba(156, 163, 175, 0.15);
+  color: #9ca3af;
+  border: 1px solid rgba(156, 163, 175, 0.3);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-large);
+  margin-bottom: var(--spacing-large);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fieldLabel {
+  font: var(--font-label-small);
+  color: var(--color-on-surface-variant);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.fieldValue {
+  font: var(--font-heading-small);
+  color: var(--color-on-surface);
+}
+
+.notice {
+  padding: var(--spacing-base) var(--spacing-large);
+  border-radius: 8px;
+  margin-bottom: var(--spacing-large);
+  font: var(--font-body-medium);
+}
+
+.noticeWarning {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
+}
+
+.noticeDanger {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+.actions {
+  display: flex;
+  gap: var(--spacing-base);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.btnPrimary {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font: var(--font-label-medium);
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.btnPrimary:hover {
+  opacity: 0.9;
+}
+
+.btnSecondary {
+  background: var(--color-surface-c-high);
+  color: var(--color-on-surface);
+  border: 1px solid var(--color-surface-variant);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font: var(--font-label-medium);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.btnSecondary:hover {
+  background: var(--color-surface-c-highest);
+}
+
+.btnDanger {
+  background: transparent;
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font: var(--font-label-medium);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.btnDanger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* Modal styles */
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--spacing-base);
+}
+
+.modalContent {
+  background: var(--color-surface);
+  border: 1px solid var(--color-surface-variant);
+  border-radius: 16px;
+  padding: var(--spacing-very-large);
+  max-width: 500px;
+  width: 100%;
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-large);
+}
+
+.modalTitle {
+  font: var(--font-heading-small);
+  color: var(--color-on-surface);
+  margin: 0;
+}
+
+.modalBody {
+  font: var(--font-body-large);
+  color: var(--color-on-surface-variant);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-base);
+}
+
+.radioGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.radioLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: var(--font-body-medium);
+  color: var(--color-on-surface);
+  cursor: pointer;
+}
+
+.textarea {
+  width: 100%;
+  background: var(--color-surface-c-lowest);
+  border: 1px solid var(--color-surface-variant);
+  color: var(--color-on-surface);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font: var(--font-body-medium);
+  resize: vertical;
+  min-height: 80px;
+  box-sizing: border-box;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-base);
+}

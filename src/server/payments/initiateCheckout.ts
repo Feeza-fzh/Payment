@@ -6,11 +6,17 @@ import { createHostedPaymentLink } from "./flutterwaveClient";
 import { koboToNairaInt } from "./money";
 import { writePaymentLog } from "./log";
 import {
+  calculateProration,
+  addOneMonthClamped,
+  addOneYearClamped,
+} from "./proration";
+import {
   CheckoutKind,
   CheckoutStatus,
   PaymentEventType,
   EventSource,
   PaymentOutcome,
+  SubscriptionStatus,
 } from "@prisma/client";
 
 export type InitiateCheckoutResult =
@@ -43,6 +49,11 @@ export async function initiateCheckout(params: {
   try {
     const user = await db.user.findUnique({
       where: { email: params.userEmail },
+      include: {
+        subscription: {
+          include: { plan: true },
+        },
+      },
     });
     const plan = await db.plan.findUnique({
       where: { tier: params.planTier },
@@ -50,7 +61,6 @@ export async function initiateCheckout(params: {
 
     if (user && plan) {
       userId = user.id;
-      amountMinor = plan.amountMinor;
 
       // PRD §7.5: Expire stale pending sessions
       await db.checkoutSession.updateMany({
@@ -61,6 +71,39 @@ export async function initiateCheckout(params: {
         },
         data: { status: CheckoutStatus.EXPIRED },
       });
+
+      // Check if this is an upgrade from an active MONTHLY plan to YEARLY (FR-4, FR-5)
+      let kind: CheckoutKind = CheckoutKind.NEW;
+      let prorationCreditMinor: number | null = null;
+      let quotedPeriodStart: Date = now;
+      let quotedPeriodEnd: Date =
+        params.planTier === "YEARLY"
+          ? addOneYearClamped(now)
+          : addOneMonthClamped(now);
+      let sessionExpiresAt = expiresAt;
+
+      const isMonthlyToYearlyUpgrade =
+        user.subscription?.status === SubscriptionStatus.ACTIVE &&
+        user.subscription.plan.tier === "MONTHLY" &&
+        params.planTier === "YEARLY";
+
+      if (isMonthlyToYearlyUpgrade && user.subscription) {
+        kind = CheckoutKind.UPGRADE;
+        const quote = calculateProration({
+          currentPeriodStart: user.subscription.currentPeriodStart,
+          currentPeriodEnd: user.subscription.currentPeriodEnd,
+          lastAmountMinor: user.subscription.lastAmountMinor,
+          yearlyPriceKobo: plan.amountMinor,
+          quoteDate: now,
+        });
+        amountMinor = quote.chargeKobo;
+        prorationCreditMinor = quote.creditKobo;
+        quotedPeriodStart = quote.quotedPeriodStart;
+        quotedPeriodEnd = quote.quotedPeriodEnd;
+        sessionExpiresAt = quote.expiresAt;
+      } else {
+        amountMinor = plan.amountMinor;
+      }
 
       // Look for an existing valid pending session for this user and plan
       const existing = await db.checkoutSession.findFirst({
@@ -82,11 +125,14 @@ export async function initiateCheckout(params: {
         data: {
           userId: user.id,
           targetPlanId: plan.id,
-          kind: CheckoutKind.NEW,
+          kind,
           txRef,
           amountMinor,
           currency,
-          expiresAt,
+          prorationCreditMinor,
+          quotedPeriodStart,
+          quotedPeriodEnd,
+          expiresAt: sessionExpiresAt,
           status: CheckoutStatus.PENDING,
         },
       });

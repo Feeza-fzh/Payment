@@ -5,12 +5,13 @@ import { encryptCardToken } from "./tokenVault";
 import { writePaymentLog, writeSubscriptionEvent } from "./log";
 import type { VerifiedPayment } from "./verifyTransaction";
 import {
-  PaymentEventType,
+  CheckoutKind,
+  CheckoutStatus,
   EventSource,
+  PaymentEventType,
   PaymentOutcome,
   SubscriptionEventType,
   SubscriptionStatus,
-  CheckoutStatus,
 } from "@prisma/client";
 
 export type FulfillEntitlementOutcome =
@@ -19,7 +20,8 @@ export type FulfillEntitlementOutcome =
   | "PAID_EXPIRED_SESSION"
   | "UPGRADE_PERIOD_DRIFT"
   | "DUPLICATE_PAYMENT"
-  | "UNMATCHED_REFERENCE";
+  | "UNMATCHED_REFERENCE"
+  | "RENEWAL_AFTER_CANCEL";
 
 export interface FulfillResult {
   ok: boolean;
@@ -80,7 +82,7 @@ export async function fulfillEntitlement(
   let outcome: PaymentOutcome = PaymentOutcome.SUCCESS;
   let fulfillOutcome: FulfillEntitlementOutcome = "FULFILLED";
 
-  // PRD 7.8 rule (b): Paid expired session is applied with PAID_EXPIRED_SESSION outcome
+  // PRD 7.8 rule (b): Paid expired session is applied with PAID_EXPIRED_SESSION outcome (T27)
   if (session.status === CheckoutStatus.EXPIRED || now > session.expiresAt) {
     outcome = PaymentOutcome.PAID_EXPIRED_SESSION;
     fulfillOutcome = "PAID_EXPIRED_SESSION";
@@ -100,13 +102,83 @@ export async function fulfillEntitlement(
     : null;
 
   try {
-    await db.$transaction(async (tx) => {
+    const txResult = await db.$transaction(async (tx) => {
       // Rule P-14: Lock the Subscription row with SELECT ... FOR UPDATE (Rule S-7 tagged template)
       await tx.$executeRaw`
         SELECT 1 FROM "Subscription"
         WHERE "userId" = ${session.userId}
         FOR UPDATE
       `;
+
+      // Read current subscription after row lock
+      const currentSub = await tx.subscription.findUnique({
+        where: { userId: session.userId },
+        include: { plan: true },
+      });
+
+      // PRD 7.8 rule (c) / T29: Duplicate payment for already-paid period
+      if (
+        currentSub &&
+        currentSub.planId === session.targetPlanId &&
+        currentSub.currentPeriodStart.getTime() === periodStart.getTime() &&
+        currentSub.currentPeriodEnd.getTime() === periodEnd.getTime() &&
+        currentSub.status === SubscriptionStatus.ACTIVE
+      ) {
+        await writePaymentLog(
+          {
+            idempotencyKey: `fail:fulfil:${payment.providerTransactionId}:dup`,
+            eventType: PaymentEventType.FAILURE,
+            source,
+            userId: session.userId,
+            checkoutSessionId: session.id,
+            providerRef: payment.txRef,
+            providerTransactionId: payment.providerTransactionId,
+            amountMinor: payment.amountMinor,
+            currency: payment.currency,
+            outcome: PaymentOutcome.DUPLICATE_PAYMENT,
+            payload: payment.rawPayload,
+          },
+          tx
+        );
+        return {
+          ok: false,
+          outcome: "DUPLICATE_PAYMENT" as const,
+          error: "Duplicate payment for current period.",
+        };
+      }
+
+      // PRD 7.8 rule (a) / T21: Upgrade period drift
+      if (session.kind === CheckoutKind.UPGRADE && currentSub) {
+        if (
+          session.quotedPeriodStart &&
+          currentSub.currentPeriodEnd.getTime() !== session.quotedPeriodStart.getTime()
+        ) {
+          outcome = PaymentOutcome.UPGRADE_PERIOD_DRIFT;
+          fulfillOutcome = "UPGRADE_PERIOD_DRIFT";
+        }
+      }
+
+      // FR-14 / T25: Renewal payment verifies after cancel
+      let keepCancelFlag = false;
+      const canceledAt = currentSub?.canceledAt ?? null;
+      if (session.kind === CheckoutKind.RENEWAL && currentSub?.cancelAtPeriodEnd) {
+        keepCancelFlag = true;
+        outcome = PaymentOutcome.RENEWAL_AFTER_CANCEL;
+        fulfillOutcome = "RENEWAL_AFTER_CANCEL";
+      }
+
+      // FR-22 / T26: Apply pendingPlan on renewal
+      let appliedPlanId = session.targetPlanId;
+      let appliedPlanTier = session.targetPlan.tier;
+      if (session.kind === CheckoutKind.RENEWAL && currentSub?.pendingPlanId) {
+        appliedPlanId = currentSub.pendingPlanId;
+        const pendingPlan = await tx.plan.findUnique({
+          where: { id: currentSub.pendingPlanId },
+        });
+        if (pendingPlan) {
+          appliedPlanTier = pendingPlan.tier;
+        }
+      }
 
       // 1. Write FULFILMENT PaymentLog row (Rule P-15, P-17)
       await writePaymentLog(
@@ -131,24 +203,25 @@ export async function fulfillEntitlement(
         where: { userId: session.userId },
         create: {
           userId: session.userId,
-          planId: session.targetPlanId,
+          planId: appliedPlanId,
           status: SubscriptionStatus.ACTIVE,
           currentPeriodStart: periodStart,
           currentPeriodEnd: periodEnd,
-          cancelAtPeriodEnd: false,
+          cancelAtPeriodEnd: keepCancelFlag,
+          canceledAt,
           cardTokenEncrypted: encryptedToken,
           lastAmountMinor: payment.amountMinor,
           currency: payment.currency,
         },
         update: {
-          planId: session.targetPlanId,
+          planId: appliedPlanId,
           status: SubscriptionStatus.ACTIVE,
           currentPeriodStart: periodStart,
           currentPeriodEnd: periodEnd,
-          cancelAtPeriodEnd: false,
+          cancelAtPeriodEnd: keepCancelFlag,
+          canceledAt: keepCancelFlag ? canceledAt : null,
           pendingPlanId: null,
           graceEndsAt: null,
-          canceledAt: null,
           ...(encryptedToken ? { cardTokenEncrypted: encryptedToken } : {}),
           lastAmountMinor: payment.amountMinor,
           currency: payment.currency,
@@ -158,7 +231,7 @@ export async function fulfillEntitlement(
       // 3. Update User.plan and CheckoutSession
       await tx.user.update({
         where: { id: session.userId },
-        data: { plan: session.targetPlan.tier },
+        data: { plan: appliedPlanTier },
       });
 
       await tx.checkoutSession.update({
@@ -178,17 +251,22 @@ export async function fulfillEntitlement(
         },
         tx
       );
+
+      return {
+        ok: true,
+        outcome: fulfillOutcome,
+        plan: appliedPlanTier,
+      };
     });
 
-    return {
-      ok: true,
-      outcome: fulfillOutcome,
-      plan: session.targetPlan.tier,
-    };
+    return txResult;
   } catch (err: unknown) {
     const errorString = String(err);
-    // If unique key collision on idempotencyKey, already handled
-    if (errorString.includes("Unique constraint failed") || errorString.includes("P2002")) {
+    // If unique key collision on idempotencyKey, already handled (Rule P-13)
+    if (
+      errorString.includes("Unique constraint failed") ||
+      errorString.includes("P2002")
+    ) {
       return { ok: true, outcome: "ALREADY_FULFILLED" };
     }
     throw err;
