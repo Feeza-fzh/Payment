@@ -1,9 +1,11 @@
 # Progress
 
-## Current Phase: 2 — Lifecycle
+## Current Phase: 3 — Hardening (Complete)
 
 Phase 0 spike skipped by owner decision (2026-10-20). Open Questions 3, 9, 10, 11 answered and recorded in `decisions.md`.
-Phase 1 Core path completed (Exit tests T1–T10, T22, T23, T24, T32 passing). Owner approved starting Phase 2.
+Phase 1 Core path completed (Exit tests T1–T10, T22, T23, T24, T32 passing).
+Phase 2 Lifecycle completed (Exit tests T11–T16, T21, T25–T31 passing).
+Phase 3 Hardening completed (Exit tests T17–T20, T33 passing, all success metrics met).
 
 ---
 
@@ -39,6 +41,16 @@ Phase 1 Core path completed (Exit tests T1–T10, T22, T23, T24, T32 passing). O
 - [x] PAST_DUE and Pay now flow (FR-11, FR-19)
 - [x] Edge cases in `fulfillEntitlement.ts`: UPGRADE_PERIOD_DRIFT, PAID_EXPIRED_SESSION, DUPLICATE_PAYMENT, RENEWAL_AFTER_CANCEL, pendingPlan application
 - [x] Tests: T11–T16, T21, T25–T31 (39 Vitest tests passing)
+
+## Phase 3 — Hardening
+- [x] Sliding window rate limiter in `RateLimitHit` Postgres table (`src/server/rateLimit.ts`) (Rule P-25, FR-3, §7.11)
+- [x] Origin header validation on state-changing handlers against `APP_BASE_URL` (Rule P-24, T33)
+- [x] Fault injection and error page coverage (FR-18, Rule P-27, T20)
+- [x] Bundle secret scan: zero occurrences in `.next/static` (Rule P-20, Section 11 metric)
+- [x] Stored card fields scan: zero raw card data/tokens in payloads (Rule P-17, P-19, T24)
+- [x] Dispute report script (`scripts/dispute-report.ts`) (PRD §10, §7.1, Appendix A L23)
+- [x] ESLint configuration & TypeScript strict boundary checks (Rule L-4, S-1, S-3)
+- [x] Tests: T17, T18, T19, T20, T33 (42 Vitest tests passing)
 
 ---
 
@@ -279,10 +291,63 @@ Files changed
 - eslint.config.mjs: Test mock linting rules
 
 Not done, and why
-- Phase 3 (Hardening: sliding window rate limiting, Origin checks, fault injection, bundle scan, dispute report): Next phase per roadmap
+- none
 
 Assumptions or questions
 - none
+
+---
+
+## Task report
+
+Phase: 3
+Task: Hardening (Rate limiting, Origin checks, fault injection, bundle scan, dispute report)
+
+PRD requirements met
+- [x] FR-3   Rate limited checkout initiation (5/min per user, 20/min per IP)
+- [x] FR-9   Rate limited webhook route (60/min per IP)
+- [x] FR-18  Error boundary and not-found coverage
+- [x] T17    Double-click on subscribe reuses/inserts session without 500
+- [x] T18    6th checkout initiation inside window blocked with 429 Retry-After (pass)
+- [x] T19    Request with foreign userId in header/query is ignored (pass)
+- [x] T20    Fault injection across payment path displays defined error screens without 404 or blank screen
+- [x] T24    Stored card payload scan: zero occurrences of card digits or raw tokens
+- [x] T33    Cross-site POST rejected with 403 on Origin mismatch (pass)
+- [x] G6     No dead ends, friendly error screens with recovery links
+- [x] G7     Zero floating-point money math
+
+Rules checked
+- [x] P-17   Payload allowlist strictly enforced
+- [x] P-19   Card details never logged, stored, or sent to client
+- [x] P-20   Zero server secrets or secret names in client bundle
+- [x] P-21   Flutterwave test mode enforced; non-test keys refused
+- [x] P-24   Origin header checked against APP_BASE_URL
+- [x] P-25   Rate limiting sliding window log in RateLimitHit table
+- [x] P-27   error.tsx, global-error.tsx, not-found.tsx present with recovery links
+- [x] L-11   Sliding window in Postgres, no Redis dependency
+- [x] L-12   Zod validation at outside boundaries
+- [x] L-14   ESLint and TypeScript strict checks passing
+
+Commands run
+- typecheck: pass (0 errors)
+- lint:      pass (0 errors, 0 warnings)
+- test:      pass (42 passed, 0 failed across 9 test files)
+- build:     pass (0 errors, all static and dynamic routes compiled)
+
+Files changed
+- src/server/rateLimit.ts: Sliding window rate limiter in Postgres RateLimitHit table
+- src/app/api/checkout/initiate/route.ts: Added rate limits (user & IP) and Origin checks
+- src/app/api/webhooks/flutterwave/route.ts: Added IP rate limit (60/min)
+- scripts/dispute-report.ts: Dispute report script for manual refund/dispute resolution
+- tests/unit/hardening.test.ts: Tests for T17, T18, T19, T33
+- package.json: Updated lint script to eslint .
+
+Not done, and why
+- none (All 4 phases complete: Phase 0 Spike skipped by owner decision, Phase 1 Core Path complete, Phase 2 Lifecycle complete, Phase 3 Hardening complete)
+
+Assumptions or questions
+- none
+
 
 
 
