@@ -46,121 +46,137 @@ export async function initiateCheckout(params: {
     .substring(2, 8)}`;
   let sessionId: string | null = null;
 
-  try {
-    const user = await db.user.findUnique({
-      where: { email: params.userEmail },
-      include: {
-        subscription: {
-          include: { plan: true },
-        },
+  const user = await db.user.findUnique({
+    where: { email: params.userEmail },
+    include: {
+      subscription: {
+        include: { plan: true },
       },
-    });
-    const plan = await db.plan.findUnique({
-      where: { tier: params.planTier },
-    });
+    },
+  });
+  const plan = await db.plan.findUnique({
+    where: { tier: params.planTier },
+  });
 
-    if (user && plan) {
-      userId = user.id;
-
-      // PRD §7.5: Expire stale pending sessions
-      await db.checkoutSession.updateMany({
-        where: {
-          userId: user.id,
-          status: CheckoutStatus.PENDING,
-          expiresAt: { lt: now },
-        },
-        data: { status: CheckoutStatus.EXPIRED },
-      });
-
-      // Check if this is an upgrade from an active MONTHLY plan to YEARLY (FR-4, FR-5)
-      let kind: CheckoutKind = CheckoutKind.NEW;
-      let prorationCreditMinor: number | null = null;
-      let quotedPeriodStart: Date = now;
-      let quotedPeriodEnd: Date =
-        params.planTier === "YEARLY"
-          ? addOneYearClamped(now)
-          : addOneMonthClamped(now);
-      let sessionExpiresAt = expiresAt;
-
-      const isMonthlyToYearlyUpgrade =
-        user.subscription?.status === SubscriptionStatus.ACTIVE &&
-        user.subscription.plan.tier === "MONTHLY" &&
-        params.planTier === "YEARLY";
-
-      if (isMonthlyToYearlyUpgrade && user.subscription) {
-        kind = CheckoutKind.UPGRADE;
-        const quote = calculateProration({
-          currentPeriodStart: user.subscription.currentPeriodStart,
-          currentPeriodEnd: user.subscription.currentPeriodEnd,
-          lastAmountMinor: user.subscription.lastAmountMinor,
-          yearlyPriceKobo: plan.amountMinor,
-          quoteDate: now,
-        });
-        amountMinor = quote.chargeKobo;
-        prorationCreditMinor = quote.creditKobo;
-        quotedPeriodStart = quote.quotedPeriodStart;
-        quotedPeriodEnd = quote.quotedPeriodEnd;
-        sessionExpiresAt = quote.expiresAt;
-      } else {
-        amountMinor = plan.amountMinor;
-      }
-
-      // Look for an existing valid pending session for this user and plan
-      const existing = await db.checkoutSession.findFirst({
-        where: {
-          userId: user.id,
-          targetPlanId: plan.id,
-          status: CheckoutStatus.PENDING,
-          expiresAt: { gt: now },
-          paymentLink: { not: null },
-        },
-      });
-
-      if (existing && existing.paymentLink) {
-        return { ok: true, checkoutUrl: existing.paymentLink };
-      }
-
-      // Create new session
-      const created = await db.checkoutSession.create({
-        data: {
-          userId: user.id,
-          targetPlanId: plan.id,
-          kind,
-          txRef,
-          amountMinor,
-          currency,
-          prorationCreditMinor,
-          quotedPeriodStart,
-          quotedPeriodEnd,
-          expiresAt: sessionExpiresAt,
-          status: CheckoutStatus.PENDING,
-        },
-      });
-      sessionId = created.id;
-      txRef = created.txRef;
-
-      // Write INITIATION row to PaymentLog (Rule P-15)
-      await writePaymentLog({
-        idempotencyKey: `init:${txRef}`,
-        eventType: PaymentEventType.INITIATION,
-        source: EventSource.CHECKOUT,
-        userId: user.id,
-        checkoutSessionId: sessionId,
-        providerRef: txRef,
-        amountMinor,
-        currency,
-        outcome: PaymentOutcome.PENDING,
-        payload: {
-          plan_tier: params.planTier,
-          tx_ref: txRef,
-          amount_minor: amountMinor,
-          currency,
-        },
-      });
-    }
-  } catch {
-    // If DB is offline, continue with standalone txRef so test keys can still be validated
+  if (!user || !plan) {
+    return { ok: false, error: "User or plan not found. Please try again." };
   }
+
+  userId = user.id;
+
+  // PRD §7.5: Expire stale pending sessions
+  await db.checkoutSession.updateMany({
+    where: {
+      userId: user.id,
+      status: CheckoutStatus.PENDING,
+      expiresAt: { lt: now },
+    },
+    data: { status: CheckoutStatus.EXPIRED },
+  });
+
+  // Check if this is an upgrade from an active MONTHLY plan to YEARLY (FR-4, FR-5)
+  let kind: CheckoutKind = CheckoutKind.NEW;
+  let prorationCreditMinor: number | null = null;
+  let quotedPeriodStart: Date = now;
+  let quotedPeriodEnd: Date =
+    params.planTier === "YEARLY"
+      ? addOneYearClamped(now)
+      : addOneMonthClamped(now);
+  let sessionExpiresAt = expiresAt;
+
+  const isMonthlyToYearlyUpgrade =
+    user.subscription?.status === SubscriptionStatus.ACTIVE &&
+    user.subscription.plan.tier === "MONTHLY" &&
+    params.planTier === "YEARLY";
+
+  // A user already active (or past_due) on the same plan tier is re-subscribing.
+  // The new period must continue from currentPeriodEnd so remaining days are preserved.
+  const isSamePlanRenew =
+    !isMonthlyToYearlyUpgrade &&
+    user.subscription &&
+    (user.subscription.status === SubscriptionStatus.ACTIVE ||
+      user.subscription.status === SubscriptionStatus.PAST_DUE) &&
+    user.subscription.plan.tier === params.planTier;
+
+  if (isMonthlyToYearlyUpgrade && user.subscription) {
+    kind = CheckoutKind.UPGRADE;
+    const quote = calculateProration({
+      currentPeriodStart: user.subscription.currentPeriodStart,
+      currentPeriodEnd: user.subscription.currentPeriodEnd,
+      lastAmountMinor: user.subscription.lastAmountMinor,
+      yearlyPriceKobo: plan.amountMinor,
+      quoteDate: now,
+    });
+    amountMinor = quote.chargeKobo;
+    prorationCreditMinor = quote.creditKobo;
+    quotedPeriodStart = quote.quotedPeriodStart;
+    quotedPeriodEnd = quote.quotedPeriodEnd;
+    sessionExpiresAt = quote.expiresAt;
+  } else if (isSamePlanRenew && user.subscription) {
+    // PRD §7.9: continue the billing cycle from where it left off.
+    kind = CheckoutKind.RENEWAL;
+    quotedPeriodStart = user.subscription.currentPeriodEnd;
+    quotedPeriodEnd =
+      params.planTier === "YEARLY"
+        ? addOneYearClamped(user.subscription.currentPeriodEnd)
+        : addOneMonthClamped(user.subscription.currentPeriodEnd);
+    amountMinor = plan.amountMinor;
+  } else {
+    amountMinor = plan.amountMinor;
+  }
+
+  // Look for an existing valid pending session for this user and plan
+  const existing = await db.checkoutSession.findFirst({
+    where: {
+      userId: user.id,
+      targetPlanId: plan.id,
+      status: CheckoutStatus.PENDING,
+      expiresAt: { gt: now },
+      paymentLink: { not: null },
+    },
+  });
+
+  if (existing && existing.paymentLink) {
+    return { ok: true, checkoutUrl: existing.paymentLink };
+  }
+
+  // Create new session
+  const created = await db.checkoutSession.create({
+    data: {
+      userId: user.id,
+      targetPlanId: plan.id,
+      kind,
+      txRef,
+      amountMinor,
+      currency,
+      prorationCreditMinor,
+      quotedPeriodStart,
+      quotedPeriodEnd,
+      expiresAt: sessionExpiresAt,
+      status: CheckoutStatus.PENDING,
+    },
+  });
+  sessionId = created.id;
+  txRef = created.txRef;
+
+  // Write INITIATION row to PaymentLog (Rule P-15)
+  await writePaymentLog({
+    idempotencyKey: `init:${txRef}`,
+    eventType: PaymentEventType.INITIATION,
+    source: EventSource.CHECKOUT,
+    userId: user.id,
+    checkoutSessionId: sessionId,
+    providerRef: txRef,
+    amountMinor,
+    currency,
+    outcome: PaymentOutcome.PENDING,
+    payload: {
+      tx_ref: txRef,
+      amount: amountMinor,
+      currency,
+      status: "initiated",
+    },
+  });
 
   // Convert kobo to whole naira using money.ts only (Rule P-1, P-3)
   const amountNaira = koboToNairaInt(amountMinor);

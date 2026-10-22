@@ -99,7 +99,7 @@ export async function verifyTransaction(params: {
       providerRef: txRef || params.transactionId,
       providerTransactionId: params.transactionId,
       outcome,
-      payload: rawResponse,
+      payload: data as Record<string, unknown>,
     });
     return { ok: false, outcome, error: `Provider status is "${status}".` };
   }
@@ -117,7 +117,7 @@ export async function verifyTransaction(params: {
       providerRef: txRef,
       providerTransactionId: params.transactionId,
       outcome,
-      payload: rawResponse,
+      payload: data as Record<string, unknown>,
     });
     return { ok: false, outcome, error: parsedAmount.error };
   }
@@ -139,7 +139,7 @@ export async function verifyTransaction(params: {
       amountMinor: parsedAmount.amountMinor,
       currency,
       outcome,
-      payload: rawResponse,
+      payload: data as Record<string, unknown>,
     });
     return {
       ok: false,
@@ -161,7 +161,7 @@ export async function verifyTransaction(params: {
       amountMinor: parsedAmount.amountMinor,
       currency,
       outcome,
-      payload: rawResponse,
+      payload: data as Record<string, unknown>,
     });
     return {
       ok: false,
@@ -182,12 +182,13 @@ export async function verifyTransaction(params: {
       providerRef: txRef,
       providerTransactionId: params.transactionId,
       outcome,
-      payload: rawResponse,
+      payload: data as Record<string, unknown>,
     });
     return { ok: false, outcome, error: "Reference mismatch." };
   }
 
   // Write VERIFICATION payment log (Rule P-15)
+  // Pass data (not rawResponse) so sanitizePayload can extract id, tx_ref, amount etc (P-17)
   await writePaymentLog({
     idempotencyKey: `verify:${params.source.toLowerCase()}:${params.transactionId}`,
     eventType: PaymentEventType.VERIFICATION,
@@ -199,7 +200,7 @@ export async function verifyTransaction(params: {
     amountMinor: parsedAmount.amountMinor,
     currency,
     outcome: PaymentOutcome.SUCCESS,
-    payload: rawResponse,
+    payload: data as Record<string, unknown>,
   });
 
   // Extract reusable card token if present (PRD §7.6, Rule P-19)
@@ -215,7 +216,7 @@ export async function verifyTransaction(params: {
       amountMinor: parsedAmount.amountMinor,
       currency,
       cardToken,
-      rawPayload: rawResponse,
+      rawPayload: data as Record<string, unknown>,
     } as VerifiedPayment,
   };
 }

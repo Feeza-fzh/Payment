@@ -65,11 +65,24 @@ export async function handleVerifiedReturn(
     };
   }
 
-  // If transactionId is missing, return processing state (FR-7)
+  // If transactionId is missing, check if the webhook already fulfilled it (FR-7)
+  // Flutterwave occasionally omits transaction_id on the redirect URL
   if (!transactionId) {
+    // Re-fetch session in case webhook completed it between page load and this check
+    const freshSession = await db.checkoutSession.findFirst({
+      where: { txRef, userId: user.id },
+      include: { targetPlan: true },
+    });
+    if (freshSession?.status === "COMPLETED") {
+      return {
+        status: "CONFIRMED",
+        message: "Your payment has been confirmed!",
+        plan: freshSession.targetPlan.tier,
+      };
+    }
     return {
       status: "PROCESSING",
-      message: "We are waiting for payment confirmation from Flutterwave.",
+      message: "We are waiting for payment confirmation from Flutterwave. Please check back shortly or contact support if this persists.",
     };
   }
 

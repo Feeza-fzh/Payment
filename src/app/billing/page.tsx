@@ -14,8 +14,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * Billing page — FR-12
- * Shows plan, status, renewal or end date, next charge amount,
- * pending changes, and full cancellation/downgrade/keep controls.
+ * Shows current plan, status, renewal date, next charge, and plan controls.
  */
 export default async function BillingPage(): Promise<React.ReactElement> {
   const user = await getCurrentUser();
@@ -23,7 +22,10 @@ export default async function BillingPage(): Promise<React.ReactElement> {
   const email = user?.email ?? "ada@example.com";
   const sub = user?.subscription;
 
-  const planTier = (sub?.plan?.tier ?? currentPlan) as "FREE" | "MONTHLY" | "YEARLY";
+  const planTier = (sub?.plan?.tier ?? currentPlan) as
+    | "FREE"
+    | "MONTHLY"
+    | "YEARLY";
   const status = (sub?.status ?? "ACTIVE") as "ACTIVE" | "PAST_DUE" | "ENDED";
 
   const periodEndFormatted = sub?.currentPeriodEnd
@@ -33,7 +35,7 @@ export default async function BillingPage(): Promise<React.ReactElement> {
         year: "numeric",
         timeZone: "UTC",
       })
-    : "None";
+    : "—";
 
   const graceEndsAtFormatted = sub?.graceEndsAt
     ? sub.graceEndsAt.toLocaleDateString("en-NG", {
@@ -67,22 +69,16 @@ export default async function BillingPage(): Promise<React.ReactElement> {
       <main
         id="billing-main"
         style={{
-          padding: "var(--spacing-very-large)",
-          maxWidth: "960px",
-          margin: "0 auto",
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "var(--spacing-very-large) var(--spacing-base)",
+          width: "100%",
+          boxSizing: "border-box",
         }}
       >
-        <h1
-          style={{
-            font: "var(--font-heading-large)",
-            letterSpacing: "var(--font-heading-large-letter-spacing)",
-            color: "var(--color-on-surface)",
-            marginBottom: "var(--spacing-large)",
-          }}
-        >
-          Billing & Subscription
-        </h1>
-
         <BillingManager
           planTier={planTier}
           status={status}

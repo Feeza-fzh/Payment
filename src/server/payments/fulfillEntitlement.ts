@@ -3,6 +3,7 @@ import { db } from "../db";
 import { getClock } from "../clock";
 import { encryptCardToken } from "./tokenVault";
 import { writePaymentLog, writeSubscriptionEvent } from "./log";
+import { addOneMonthClamped, addOneYearClamped } from "./proration";
 import type { VerifiedPayment } from "./verifyTransaction";
 import {
   CheckoutKind,
@@ -88,13 +89,15 @@ export async function fulfillEntitlement(
     fulfillOutcome = "PAID_EXPIRED_SESSION";
   }
 
-  // Calculate new subscription period
+  // Use quoted period from the session when available.
+  // Fallback uses clamped calendar helpers (not raw ms) to handle leap years
+  // and variable month lengths correctly (avoids the 30-day / 365-day bug).
   const periodStart = session.quotedPeriodStart ?? now;
   const periodEnd =
     session.quotedPeriodEnd ??
     (session.targetPlan.tier === "YEARLY"
-      ? new Date(periodStart.getTime() + 365 * 24 * 60 * 60 * 1000)
-      : new Date(periodStart.getTime() + 30 * 24 * 60 * 60 * 1000));
+      ? addOneYearClamped(periodStart)
+      : addOneMonthClamped(periodStart));
 
   // Encrypt card token if available (Rule P-19)
   const encryptedToken = payment.cardToken

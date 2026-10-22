@@ -67,7 +67,7 @@ function ctaLabel(cta: PlanCta): string {
     case "current":
       return "Current plan";
     case "subscribe":
-      return "Subscribe";
+      return "Upgrade";
     case "upgrade":
       return "Upgrade to yearly";
     case "downgrade-to-free":

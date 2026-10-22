@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import ShellHeader from "@/components/shell/ShellHeader";
 import PlanCard from "@/components/plans/PlanCard";
 import type {
@@ -95,7 +96,7 @@ function resolveCta(
  * replace the constant with their output.
  */
 interface PlansPageProps {
-  searchParams?: Promise<{ error?: string }>;
+  searchParams?: Promise<{ error?: string; confirmed?: string }>;
 }
 
 export default async function PlansPage(
@@ -103,6 +104,7 @@ export default async function PlansPage(
 ): Promise<React.ReactElement> {
   const searchParams = props.searchParams ? await props.searchParams : undefined;
   const errorMessage = searchParams?.error;
+  const isConfirmed = searchParams?.confirmed === "1";
 
   const user = await getCurrentUser();
   const activeEffectivePlan: EffectivePlan = effectivePlan(user);
@@ -118,51 +120,113 @@ export default async function PlansPage(
       />
 
       <main className={styles.main} id="main-content">
-        {/* Page heading */}
-        <header className={styles.pageHeader}>
-          <h1 className={styles.pageTitle} id="page-title">
-            Choose your plan
-          </h1>
-        </header>
-
-        {/* PRD §7.12, Rule P-27: Inline error banner */}
-        {errorMessage && (
+        {isConfirmed ? (
+          /* Payment confirmation view — shown after redirect from billing/return */
           <div
-            role="alert"
             style={{
-              maxWidth: "960px",
-              width: "100%",
-              marginBottom: "var(--spacing-large)",
-              padding: "var(--spacing-medium) var(--spacing-large)",
-              background: "#F8EFEF",
-              border: "1px solid #f9c8c8",
-              borderRadius: "12px",
-              color: "#333333",
-              fontSize: "14px",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              textAlign: "center",
+              padding: "64px 24px",
+              gap: "16px",
             }}
           >
-            <strong>Checkout Notice:</strong> {errorMessage}
-          </div>
-        )}
-
-        {/* FR-2: Three plan cards with §5.2 CTAs */}
-        <div
-          className={styles.grid}
-          id="plans-grid"
-          role="list"
-          aria-label="Available plans"
-        >
-          {PLAN_DEFINITIONS.map((plan) => (
-            <div key={plan.tier} role="listitem" className={styles.cardWrapper}>
-              <PlanCard
-                plan={plan}
-                cta={resolveCta(plan.tier, activeEffectivePlan)}
-                recommended={plan.tier === "YEARLY"}
-              />
+            <div
+              style={{
+                width: "56px",
+                height: "56px",
+                borderRadius: "50%",
+                background: "#E8F5E9",
+                color: "#2E7D32",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "26px",
+              }}
+            >
+              ✓
             </div>
-          ))}
-        </div>
+            <h1
+              style={{
+                fontSize: "28px",
+                fontWeight: 700,
+                color: "var(--color-on-surface)",
+                margin: 0,
+              }}
+            >
+              Payment Confirmed
+            </h1>
+            <p style={{ color: "var(--color-on-surface-variant)", margin: 0 }}>
+              Your subscription is now active.
+            </p>
+            <Link
+              href="/billing"
+              style={{
+                marginTop: "8px",
+                display: "inline-block",
+                padding: "12px 28px",
+                background: "var(--color-primary)",
+                color: "var(--color-on-primary)",
+                borderRadius: "8px",
+                textDecoration: "none",
+                fontWeight: 600,
+                fontSize: "15px",
+              }}
+              id="btn-go-to-billing"
+            >
+              Go to Billing
+            </Link>
+          </div>
+        ) : (
+          <>
+            {/* Page heading */}
+            <header className={styles.pageHeader}>
+              <h1 className={styles.pageTitle} id="page-title">
+                Choose your plan
+              </h1>
+            </header>
 
+            {/* PRD §7.12, Rule P-27: Inline error banner */}
+            {errorMessage && (
+              <div
+                role="alert"
+                style={{
+                  maxWidth: "960px",
+                  width: "100%",
+                  marginBottom: "var(--spacing-large)",
+                  padding: "var(--spacing-medium) var(--spacing-large)",
+                  background: "#F8EFEF",
+                  border: "1px solid #f9c8c8",
+                  borderRadius: "12px",
+                  color: "#333333",
+                  fontSize: "14px",
+                }}
+              >
+                <strong>Checkout Notice:</strong> {errorMessage}
+              </div>
+            )}
+
+            {/* FR-2: Three plan cards with §5.2 CTAs */}
+            <div
+              className={styles.grid}
+              id="plans-grid"
+              role="list"
+              aria-label="Available plans"
+            >
+              {PLAN_DEFINITIONS.map((plan) => (
+                <div key={plan.tier} role="listitem" className={styles.cardWrapper}>
+                  <PlanCard
+                    plan={plan}
+                    cta={resolveCta(plan.tier, activeEffectivePlan)}
+                    recommended={plan.tier === "YEARLY"}
+                  />
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </main>
     </>
   );

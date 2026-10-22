@@ -5,7 +5,7 @@ import { cancelSubscription } from "@/server/billing/cancelSubscription";
 import { saveCancellationReason } from "@/server/billing/saveCancellationReason";
 import { scheduleDowngrade } from "@/server/billing/scheduleDowngrade";
 import { keepMyPlan } from "@/server/billing/keepMyPlan";
-import { calculateProration } from "@/server/payments/proration";
+import { calculateProration, addOneMonthClamped, addOneYearClamped } from "@/server/payments/proration";
 import { db } from "@/server/db";
 import { getClock } from "@/server/clock";
 import { decryptCardToken } from "@/server/payments/tokenVault";
@@ -220,6 +220,14 @@ export async function payNowAction(): Promise<
   const amountMinor = sub.plan.amountMinor;
   const currency = sub.currency;
 
+  // PRD §7.9 / P-4: period must start from currentPeriodEnd, not now.
+  // Starting from now would discard the remaining days the user already paid for.
+  const renewalPeriodStart = sub.currentPeriodEnd;
+  const renewalPeriodEnd =
+    sub.plan.tier === PlanTier.YEARLY
+      ? addOneYearClamped(renewalPeriodStart)
+      : addOneMonthClamped(renewalPeriodStart);
+
   // Create RENEWAL session
   const session = await db.checkoutSession.create({
     data: {
@@ -229,11 +237,8 @@ export async function payNowAction(): Promise<
       txRef,
       amountMinor,
       currency,
-      quotedPeriodStart: now,
-      quotedPeriodEnd:
-        sub.plan.tier === PlanTier.YEARLY
-          ? new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000)
-          : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+      quotedPeriodStart: renewalPeriodStart,
+      quotedPeriodEnd: renewalPeriodEnd,
       expiresAt: new Date(now.getTime() + 15 * 60 * 1000),
       status: CheckoutStatus.PENDING,
     },

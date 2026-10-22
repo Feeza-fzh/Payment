@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useTransition } from "react";
+import React, { useState, useTransition, useEffect, useRef } from "react";
+import Link from "next/link";
 import styles from "./BillingManager.module.css";
 import {
   cancelSubscriptionAction,
   saveCancellationReasonAction,
-  scheduleDowngradeAction,
   keepMyPlanAction,
   payNowAction,
 } from "@/app/billing/actions";
@@ -22,46 +22,72 @@ export interface BillingManagerProps {
   graceEndsAtFormatted?: string | null;
 }
 
-export default function BillingManager(props: BillingManagerProps): React.ReactElement {
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function planLabel(tier: BillingManagerProps["planTier"]): string {
+  if (tier === "MONTHLY") return "Monthly";
+  if (tier === "YEARLY") return "Yearly";
+  return "Free";
+}
+
+function planSubtitle(tier: BillingManagerProps["planTier"]): string {
+  if (tier === "MONTHLY") return "Billed every 30 days";
+  if (tier === "YEARLY") return "Billed annually — best value";
+  return "No active subscription";
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+export default function BillingManager(
+  props: BillingManagerProps
+): React.ReactElement {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [resubscribeSuccess, setResubscribeSuccess] = useState(false);
+  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Modals state
+  // Auto-dismiss the resubscribe success banner after 5 s
+  useEffect(() => {
+    if (!resubscribeSuccess) return;
+    dismissTimerRef.current = setTimeout(() => setResubscribeSuccess(false), 5000);
+    return () => {
+      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
+    };
+  }, [resubscribeSuccess]);
+
+  // Modal state
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showReasonModal, setShowReasonModal] = useState(false);
+  const [showResubscribeModal, setShowResubscribeModal] = useState(false);
   const [selectedReason, setSelectedReason] = useState<CancellationReasonCode>(
     CancellationReasonCode.TOO_EXPENSIVE
   );
   const [reasonText, setReasonText] = useState("");
 
-  const handleCancelClick = () => {
-    setError(null);
-    setShowCancelModal(true);
-  };
-
   const confirmCancel = () => {
+    setError(null);
     startTransition(async () => {
       const requestId = Math.random().toString(36).substring(2, 10);
       const res = await cancelSubscriptionAction(requestId);
       if (res.ok) {
         setShowCancelModal(false);
         setShowReasonModal(true);
-        setNotice("Your subscription will end on the scheduled date.");
+        setNotice(null);
       } else {
-        setError(res.error || "Failed to cancel subscription.");
+        setError(res.error ?? "Failed to cancel subscription.");
       }
     });
   };
 
-  const submitReason = (skip = false) => {
-    if (skip) {
-      setShowReasonModal(false);
-      return;
-    }
+  const submitReason = (skip: boolean) => {
     startTransition(async () => {
-      const requestId = Math.random().toString(36).substring(2, 10);
-      await saveCancellationReasonAction(selectedReason, reasonText, requestId);
+      if (!skip) {
+        await saveCancellationReasonAction(
+          selectedReason,
+          reasonText.trim() ? reasonText.trim() : undefined
+        );
+      }
       setShowReasonModal(false);
     });
   };
@@ -72,25 +98,13 @@ export default function BillingManager(props: BillingManagerProps): React.ReactE
       const requestId = Math.random().toString(36).substring(2, 10);
       const res = await keepMyPlanAction(requestId);
       if (res.ok) {
-        setNotice("Your plan has been kept! You will remain subscribed.");
+        setResubscribeSuccess(true);
       } else {
-        setError(res.error || "Failed to keep plan.");
+        setError(res.error ?? "Failed to update subscription.");
       }
     });
   };
 
-  const handleDowngrade = () => {
-    setError(null);
-    startTransition(async () => {
-      const requestId = Math.random().toString(36).substring(2, 10);
-      const res = await scheduleDowngradeAction(requestId);
-      if (res.ok) {
-        setNotice("Your plan will switch to Monthly at the end of your billing cycle.");
-      } else {
-        setError(res.error || "Failed to schedule downgrade.");
-      }
-    });
-  };
 
   const handlePayNow = () => {
     setError(null);
@@ -103,130 +117,197 @@ export default function BillingManager(props: BillingManagerProps): React.ReactE
           setNotice("Payment successful! Your subscription is active.");
         }
       } else {
-        setError(res.error || "Payment attempt failed.");
+        setError(res.error ?? "Payment attempt failed.");
       }
     });
   };
 
+  const canCancel =
+    props.status === "ACTIVE" &&
+    !props.cancelAtPeriodEnd &&
+    props.planTier !== "FREE";
+  const hasActions =
+    props.status === "PAST_DUE" ||
+    canCancel;
+
   return (
     <div className={styles.container}>
-      {error && <div className={`${styles.notice} ${styles.noticeDanger}`}>{error}</div>}
-      {notice && <div className={`${styles.notice} ${styles.noticeWarning}`}>{notice}</div>}
-
-      <div className={styles.panel}>
-        <div className={styles.header}>
-          <h2 className={styles.title}>Subscription Overview</h2>
-          <span
-            className={`${styles.statusBadge} ${
-              props.status === "ACTIVE"
-                ? styles.statusActive
-                : props.status === "PAST_DUE"
-                ? styles.statusPastDue
-                : styles.statusEnded
-            }`}
+      {/* Alert banners */}
+      {error && (
+        <div className={`${styles.alert} ${styles.alertDanger}`} role="alert">
+          {error}
+        </div>
+      )}
+      {notice && !props.cancelAtPeriodEnd && (
+        <div className={`${styles.alert} ${styles.alertInfo}`} role="status">
+          {notice}
+        </div>
+      )}
+      {resubscribeSuccess && (
+        <div className={`${styles.alert} ${styles.alertSuccess}`} role="status">
+          Resubscribed successfully.
+        </div>
+      )}
+      {props.status === "PAST_DUE" && props.graceEndsAtFormatted && (
+        <div
+          className={`${styles.alert} ${styles.alertDanger}`}
+          role="alert"
+        >
+          ⚠️ Payment failed. Pay now to keep access — grace period ends{" "}
+          <strong>{props.graceEndsAtFormatted}</strong>.
+        </div>
+      )}
+      {props.cancelAtPeriodEnd && (
+        <div className={`${styles.alert} ${styles.alertCancel}`} role="status">
+          <span>
+            Your subscription will be canceled on {props.periodEndFormatted}.
+          </span>
+          <button
+            className={styles.btnResubscribe}
+            onClick={() => setShowResubscribeModal(true)}
+            disabled={isPending}
+            id="btn-resubscribe"
           >
-            {props.status === "PAST_DUE" ? "Past Due" : props.status}
+            Resubscribe
+          </button>
+        </div>
+      )}
+      {props.pendingPlanTier && !props.cancelAtPeriodEnd && (
+        <div className={`${styles.alert} ${styles.alertWarning}`} role="status">
+          Scheduled change: switches to{" "}
+          <strong>{props.pendingPlanTier}</strong> on{" "}
+          <strong>{props.periodEndFormatted}</strong>.
+        </div>
+      )}
+
+      {/* Plan hero */}
+      <div className={styles.planHero}>
+        <div className={styles.planInfo}>
+          <h1 className={styles.planName} id="current-plan-name">
+            {planLabel(props.planTier)} Plan
+          </h1>
+          <p className={styles.planSub}>{planSubtitle(props.planTier)}</p>
+        </div>
+        <Link
+          href="/plans"
+          className={styles.managePlansLink}
+          id="btn-manage-plans"
+        >
+          Manage Plans
+        </Link>
+      </div>
+
+      {/* Meta strip */}
+      <div className={styles.metaGrid}>
+        <div className={styles.metaField}>
+          <span className={styles.metaLabel}>
+            {props.cancelAtPeriodEnd ? "Access Ends" : "Renews On"}
+          </span>
+          <span className={styles.metaValue}>{props.periodEndFormatted}</span>
+        </div>
+        <div className={styles.metaField}>
+          <span className={styles.metaLabel}>Next Charge</span>
+          <span className={styles.metaValue}>
+            {props.cancelAtPeriodEnd ? "₦0" : props.nextChargeFormatted}
           </span>
         </div>
-
-        {props.status === "PAST_DUE" && props.graceEndsAtFormatted && (
-          <div className={`${styles.notice} ${styles.noticeDanger}`}>
-            Payment failed. Please pay by {props.graceEndsAtFormatted} to retain access.
-          </div>
-        )}
-
-        {props.cancelAtPeriodEnd && (
-          <div className={`${styles.notice} ${styles.noticeWarning}`}>
-            Your plan is set to cancel on {props.periodEndFormatted}. You will not be charged again.
-          </div>
-        )}
-
-        {props.pendingPlanTier && (
-          <div className={`${styles.notice} ${styles.noticeWarning}`}>
-            Scheduled change: Switches to {props.pendingPlanTier} on {props.periodEndFormatted}.
-          </div>
-        )}
-
-        <div className={styles.grid}>
-          <div className={styles.field}>
-            <span className={styles.fieldLabel}>Plan Tier</span>
-            <span className={styles.fieldValue}>{props.planTier}</span>
-          </div>
-
-          <div className={styles.field}>
-            <span className={styles.fieldLabel}>
-              {props.cancelAtPeriodEnd ? "Access Ends" : "Renews On"}
-            </span>
-            <span className={styles.fieldValue}>{props.periodEndFormatted}</span>
-          </div>
-
-          <div className={styles.field}>
-            <span className={styles.fieldLabel}>Next Charge</span>
-            <span className={styles.fieldValue}>
-              {props.cancelAtPeriodEnd ? "₦0.00" : props.nextChargeFormatted}
+        {props.planTier !== "FREE" && (
+          <div className={styles.metaField}>
+            <span className={styles.metaLabel}>Billing Cycle</span>
+            <span className={styles.metaValue}>
+              {props.planTier === "YEARLY" ? "Annual" : "Monthly"}
             </span>
           </div>
-        </div>
+        )}
+      </div>
 
-        <div className={styles.actions}>
+      {/* Actions row */}
+      {hasActions && (
+        <div className={styles.actionsRow}>
+          {/* Pay now (PAST_DUE) */}
           {props.status === "PAST_DUE" && (
             <button
               className={styles.btnPrimary}
               onClick={handlePayNow}
               disabled={isPending}
+              id="btn-pay-now"
             >
-              {isPending ? "Processing..." : "Pay Now"}
+              {isPending ? "Processing…" : "Pay Now"}
             </button>
           )}
 
-          {(props.cancelAtPeriodEnd || props.pendingPlanTier) && (
+
+
+          {/* Cancel */}
+          {canCancel && (
             <button
-              className={styles.btnPrimary}
-              onClick={handleKeepMyPlan}
+              className={styles.btnDanger}
+              onClick={() => {
+                setError(null);
+                setShowCancelModal(true);
+              }}
               disabled={isPending}
+              id="btn-cancel-subscription"
             >
-              {isPending ? "Updating..." : "Keep My Plan"}
+              Cancel Subscription
             </button>
           )}
+        </div>
+      )}
 
-          {props.status === "ACTIVE" &&
-            props.planTier === "YEARLY" &&
-            !props.cancelAtPeriodEnd &&
-            !props.pendingPlanTier && (
+      {/* ── Resubscribe confirmation modal ────────────────────────────────── */}
+      {showResubscribeModal && (
+        <div className={styles.modalBackdrop} role="dialog" aria-modal="true" aria-labelledby="resubscribe-modal-title">
+          <div className={styles.modalContent}>
+            <h3 className={styles.modalTitle} id="resubscribe-modal-title">
+              Resubscribe?
+            </h3>
+            <div className={styles.modalBody}>
+              <p>
+                You&apos;ll keep access to your current{" "}
+                <strong>{planLabel(props.planTier)} Plan</strong>. Your next
+                charge of{" "}
+                <strong>{props.nextChargeFormatted}</strong> will be processed
+                on <strong>{props.periodEndFormatted}</strong>.
+              </p>
+              <p>You can cancel again at any time before that date.</p>
+            </div>
+            <div className={styles.modalActions}>
               <button
                 className={styles.btnSecondary}
-                onClick={handleDowngrade}
+                onClick={() => setShowResubscribeModal(false)}
                 disabled={isPending}
               >
-                {isPending ? "Updating..." : "Switch to Monthly"}
+                Cancel
               </button>
-            )}
-
-          {props.status === "ACTIVE" &&
-            !props.cancelAtPeriodEnd &&
-            props.planTier !== "FREE" && (
               <button
-                className={styles.btnDanger}
-                onClick={handleCancelClick}
+                className={styles.btnPrimary}
+                onClick={() => {
+                  setShowResubscribeModal(false);
+                  handleKeepMyPlan();
+                }}
                 disabled={isPending}
+                id="btn-confirm-resubscribe"
               >
-                Cancel Subscription
+                {isPending ? "Updating…" : "Confirm Resubscription"}
               </button>
-            )}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Cancel Confirmation Modal (FR-13, FR-14) */}
+      {/* ── Cancel confirmation modal ──────────────────────────────────────── */}
       {showCancelModal && (
-        <div className={styles.modalBackdrop}>
+        <div className={styles.modalBackdrop} role="dialog" aria-modal="true">
           <div className={styles.modalContent}>
             <h3 className={styles.modalTitle}>Cancel Subscription?</h3>
             <div className={styles.modalBody}>
               <p>
                 Your paid access will continue until{" "}
-                <strong>{props.periodEndFormatted}</strong>.
+                <strong>{props.periodEndFormatted}</strong>. After that, your
+                account reverts to the Free plan.
               </p>
-              <p>No further charges will be made to your payment method.</p>
+              <p>No further charges will be made.</p>
             </div>
             <div className={styles.modalActions}>
               <button
@@ -234,77 +315,57 @@ export default function BillingManager(props: BillingManagerProps): React.ReactE
                 onClick={() => setShowCancelModal(false)}
                 disabled={isPending}
               >
-                Keep Plan
+                Keep Subscription
               </button>
               <button
                 className={styles.btnDanger}
                 onClick={confirmCancel}
                 disabled={isPending}
               >
-                {isPending ? "Cancelling..." : "Confirm Cancellation"}
+                {isPending ? "Cancelling…" : "Confirm Cancellation"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Optional Reason Survey Modal (FR-15) */}
+      {/* ── Reason survey modal ────────────────────────────────────────────── */}
       {showReasonModal && (
-        <div className={styles.modalBackdrop}>
+        <div className={styles.modalBackdrop} role="dialog" aria-modal="true">
           <div className={styles.modalContent}>
             <h3 className={styles.modalTitle}>Help us improve</h3>
             <div className={styles.modalBody}>
               <p>Why did you decide to cancel? (Optional)</p>
               <div className={styles.radioGroup}>
-                <label className={styles.radioLabel}>
-                  <input
-                    type="radio"
-                    name="reason"
-                    checked={selectedReason === CancellationReasonCode.TOO_EXPENSIVE}
-                    onChange={() => setSelectedReason(CancellationReasonCode.TOO_EXPENSIVE)}
-                  />
-                  Too expensive
-                </label>
-                <label className={styles.radioLabel}>
-                  <input
-                    type="radio"
-                    name="reason"
-                    checked={selectedReason === CancellationReasonCode.MISSING_FEATURES}
-                    onChange={() => setSelectedReason(CancellationReasonCode.MISSING_FEATURES)}
-                  />
-                  Missing features
-                </label>
-                <label className={styles.radioLabel}>
-                  <input
-                    type="radio"
-                    name="reason"
-                    checked={selectedReason === CancellationReasonCode.NOT_USING}
-                    onChange={() => setSelectedReason(CancellationReasonCode.NOT_USING)}
-                  />
-                  Not using it enough
-                </label>
-                <label className={styles.radioLabel}>
-                  <input
-                    type="radio"
-                    name="reason"
-                    checked={selectedReason === CancellationReasonCode.FOUND_ALTERNATIVE}
-                    onChange={() => setSelectedReason(CancellationReasonCode.FOUND_ALTERNATIVE)}
-                  />
-                  Found an alternative
-                </label>
-                <label className={styles.radioLabel}>
-                  <input
-                    type="radio"
-                    name="reason"
-                    checked={selectedReason === CancellationReasonCode.OTHER}
-                    onChange={() => setSelectedReason(CancellationReasonCode.OTHER)}
-                  />
-                  Other
-                </label>
+                {(
+                  [
+                    [CancellationReasonCode.TOO_EXPENSIVE, "Too expensive"],
+                    [
+                      CancellationReasonCode.MISSING_FEATURES,
+                      "Missing features",
+                    ],
+                    [CancellationReasonCode.NOT_USING, "Not using it enough"],
+                    [
+                      CancellationReasonCode.FOUND_ALTERNATIVE,
+                      "Found an alternative",
+                    ],
+                    [CancellationReasonCode.OTHER, "Other"],
+                  ] as [CancellationReasonCode, string][]
+                ).map(([code, label]) => (
+                  <label key={code} className={styles.radioLabel}>
+                    <input
+                      type="radio"
+                      name="reason"
+                      checked={selectedReason === code}
+                      onChange={() => setSelectedReason(code)}
+                    />
+                    {label}
+                  </label>
+                ))}
               </div>
               <textarea
                 className={styles.textarea}
-                placeholder="Additional feedback (up to 500 characters)"
+                placeholder="Additional feedback (optional, up to 500 characters)"
                 maxLength={500}
                 value={reasonText}
                 onChange={(e) => setReasonText(e.target.value)}
@@ -323,7 +384,7 @@ export default function BillingManager(props: BillingManagerProps): React.ReactE
                 onClick={() => submitReason(false)}
                 disabled={isPending}
               >
-                {isPending ? "Saving..." : "Submit Feedback"}
+                {isPending ? "Saving…" : "Submit Feedback"}
               </button>
             </div>
           </div>
