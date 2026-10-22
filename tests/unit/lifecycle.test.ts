@@ -468,4 +468,77 @@ describe("Lifecycle & Subscriptions — T13–T16, T21, T25–T27, T29, T30", ()
       })
     );
   });
+
+  it("Yearly user downgrades to monthly: 1 month is stacked onto current yearly plan", async () => {
+    const yearlyPeriodStart = new Date("2026-01-01T00:00:00.000Z");
+    const yearlyPeriodEnd = new Date("2027-01-01T00:00:00.000Z");
+    const newPeriodEnd = new Date("2027-02-01T00:00:00.000Z");
+
+    const currentSub = {
+      id: "sub_yearly",
+      userId: "usr_1",
+      status: SubscriptionStatus.ACTIVE,
+      currentPeriodStart: yearlyPeriodStart,
+      currentPeriodEnd: yearlyPeriodEnd,
+      cancelAtPeriodEnd: false,
+      canceledAt: null,
+      planId: "plan_yearly_id",
+      plan: { id: "plan_yearly_id", tier: PlanTier.YEARLY },
+    };
+
+    const session = {
+      id: "sess_downgrade",
+      userId: "usr_1",
+      targetPlanId: "plan_monthly_id",
+      targetPlan: { id: "plan_monthly_id", tier: PlanTier.MONTHLY },
+      kind: CheckoutKind.RENEWAL,
+      status: CheckoutStatus.PENDING,
+      amountMinor: 500000,
+      currency: "NGN",
+      expiresAt: new Date("2026-06-01T01:00:00.000Z"),
+      quotedPeriodStart: yearlyPeriodEnd,
+      quotedPeriodEnd: newPeriodEnd,
+    };
+
+    vi.spyOn(db.checkoutSession, "findUnique").mockResolvedValue(session as any);
+    vi.spyOn(db.subscription, "findUnique").mockResolvedValue(currentSub as any);
+    vi.spyOn(db.paymentLog, "create").mockResolvedValue({} as any);
+    const upsertSpy = vi.spyOn(db.subscription, "upsert").mockResolvedValue({} as any);
+    const userUpdateSpy = vi.spyOn(db.user, "update").mockResolvedValue({} as any);
+    vi.spyOn(db.checkoutSession, "update").mockResolvedValue({} as any);
+    vi.spyOn(db.subscriptionEvent, "create").mockResolvedValue({} as any);
+    vi.spyOn(db, "$transaction").mockImplementation(async (cb: any) => cb(db));
+
+    const verifiedPayment = {
+      __brand: "VerifiedPayment" as const,
+      providerTransactionId: "flw_downgrade_tx",
+      txRef: "sub_monthly_123",
+      amountMinor: 500000,
+      currency: "NGN",
+      rawPayload: { id: 1005 },
+    };
+
+    const res = await fulfillEntitlement(
+      verifiedPayment as unknown as VerifiedPayment,
+      EventSource.WEBHOOK
+    );
+
+    expect(res.ok).toBe(true);
+    expect(res.plan).toBe(PlanTier.MONTHLY);
+    expect(userUpdateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { plan: PlanTier.MONTHLY },
+      })
+    );
+    expect(upsertSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          planId: "plan_monthly_id",
+          pendingPlanId: null,
+          currentPeriodStart: yearlyPeriodStart,
+          currentPeriodEnd: newPeriodEnd,
+        }),
+      })
+    );
+  });
 });

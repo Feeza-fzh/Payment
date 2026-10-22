@@ -60,6 +60,39 @@
   opacity: 0.88;
 }
 
+/* ── Free tier styling ────────────────────────────────────────────────────── */
+.freeBadge {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 3px 10px;
+  background: var(--color-surface-variant);
+  color: var(--color-on-surface-variant);
+  border-radius: 6px;
+  font: var(--font-label-small);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+
+.freeUpgradeCta {
+  background: var(--color-surface-c-low);
+  border: 1px solid var(--color-surface-variant);
+  border-radius: 12px;
+  padding: var(--spacing-large);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-medium);
+  align-items: flex-start;
+}
+
+.freeUpgradeText {
+  margin: 0;
+  font: var(--font-body-medium);
+  color: var(--color-on-surface);
+  line-height: 1.5;
+}
+
 /* ── Meta strip ───────────────────────────────────────────────────────────── */
 .metaGrid {
   display: flex;

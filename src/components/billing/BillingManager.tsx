@@ -20,6 +20,7 @@ export interface BillingManagerProps {
   canceledAtFormatted?: string | null;
   pendingPlanTier?: "FREE" | "MONTHLY" | "YEARLY" | null;
   graceEndsAtFormatted?: string | null;
+  downgradedToMonthly?: boolean;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -33,7 +34,7 @@ function planLabel(tier: BillingManagerProps["planTier"]): string {
 function planSubtitle(tier: BillingManagerProps["planTier"]): string {
   if (tier === "MONTHLY") return "Billed every 30 days";
   if (tier === "YEARLY") return "Billed annually — best value";
-  return "No active subscription";
+  return "You are on the free plan with no active subscription.";
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -45,6 +46,13 @@ export default function BillingManager(
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [resubscribeSuccess, setResubscribeSuccess] = useState(false);
+  const isDowngradeBannerTarget = Boolean(
+    (props.downgradedToMonthly || props.pendingPlanTier) &&
+    !props.cancelAtPeriodEnd
+  );
+  const [showPendingBanner, setShowPendingBanner] = useState(
+    isDowngradeBannerTarget
+  );
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-dismiss the resubscribe success banner after 5 s
@@ -55,6 +63,15 @@ export default function BillingManager(
       if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
     };
   }, [resubscribeSuccess]);
+
+  // Auto-dismiss the downgrade / pending plan banner after 5 s
+  useEffect(() => {
+    if (!isDowngradeBannerTarget) return;
+    const timer = setTimeout(() => {
+      setShowPendingBanner(false);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [isDowngradeBannerTarget]);
 
   // Modal state
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -172,17 +189,28 @@ export default function BillingManager(
           </button>
         </div>
       )}
-      {props.pendingPlanTier && !props.cancelAtPeriodEnd && (
+      {showPendingBanner && isDowngradeBannerTarget && (
         <div className={`${styles.alert} ${styles.alertWarning}`} role="status">
-          Scheduled change: switches to{" "}
-          <strong>{props.pendingPlanTier}</strong> on{" "}
-          <strong>{props.periodEndFormatted}</strong>.
+          {props.downgradedToMonthly || props.pendingPlanTier === "MONTHLY" ? (
+            <span>
+              You have downgraded to the Monthly plan. Your subscription ends on{" "}
+              <strong>{props.periodEndFormatted}</strong>.
+            </span>
+          ) : (
+            <span>
+              You have scheduled a switch to the {planLabel(props.pendingPlanTier!)} plan. Your subscription ends on{" "}
+              <strong>{props.periodEndFormatted}</strong>.
+            </span>
+          )}
         </div>
       )}
 
       {/* Plan hero */}
       <div className={styles.planHero}>
         <div className={styles.planInfo}>
+          {props.planTier === "FREE" && (
+            <span className={styles.freeBadge}>Current Tier</span>
+          )}
           <h1 className={styles.planName} id="current-plan-name">
             {planLabel(props.planTier)} Plan
           </h1>
@@ -193,33 +221,65 @@ export default function BillingManager(
           className={styles.managePlansLink}
           id="btn-manage-plans"
         >
-          Manage Plans
+          {props.planTier === "FREE" ? "Upgrade Plan" : "Manage Plans"}
         </Link>
       </div>
 
       {/* Meta strip */}
-      <div className={styles.metaGrid}>
-        <div className={styles.metaField}>
-          <span className={styles.metaLabel}>
-            {props.cancelAtPeriodEnd ? "Access Ends" : "Renews On"}
-          </span>
-          <span className={styles.metaValue}>{props.periodEndFormatted}</span>
+      {props.planTier === "FREE" ? (
+        <div className={styles.metaGrid}>
+          <div className={styles.metaField}>
+            <span className={styles.metaLabel}>Status</span>
+            <span className={styles.metaValue}>Free Tier</span>
+          </div>
+          <div className={styles.metaField}>
+            <span className={styles.metaLabel}>Recurring Cost</span>
+            <span className={styles.metaValue}>₦0</span>
+          </div>
+          <div className={styles.metaField}>
+            <span className={styles.metaLabel}>Subscription</span>
+            <span className={styles.metaValue}>None active</span>
+          </div>
         </div>
-        <div className={styles.metaField}>
-          <span className={styles.metaLabel}>Next Charge</span>
-          <span className={styles.metaValue}>
-            {props.cancelAtPeriodEnd ? "₦0" : props.nextChargeFormatted}
-          </span>
-        </div>
-        {props.planTier !== "FREE" && (
+      ) : (
+        <div className={styles.metaGrid}>
+          <div className={styles.metaField}>
+            <span className={styles.metaLabel}>
+              {props.cancelAtPeriodEnd ? "Access Ends" : "Renews On"}
+            </span>
+            <span className={styles.metaValue}>{props.periodEndFormatted}</span>
+          </div>
+          <div className={styles.metaField}>
+            <span className={styles.metaLabel}>Next Charge</span>
+            <span className={styles.metaValue}>
+              {props.cancelAtPeriodEnd ? "₦0" : props.nextChargeFormatted}
+            </span>
+          </div>
           <div className={styles.metaField}>
             <span className={styles.metaLabel}>Billing Cycle</span>
             <span className={styles.metaValue}>
               {props.planTier === "YEARLY" ? "Annual" : "Monthly"}
             </span>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Free plan upgrade callout */}
+      {props.planTier === "FREE" && (
+        <div className={styles.freeUpgradeCta}>
+          <p className={styles.freeUpgradeText}>
+            You currently have no active paid plan. Upgrade to a Monthly or Yearly plan to unlock all features.
+          </p>
+          <Link
+            href="/plans"
+            className={styles.btnPrimary}
+            id="btn-explore-plans"
+            style={{ textDecoration: "none", display: "inline-block" }}
+          >
+            Explore Plans
+          </Link>
+        </div>
+      )}
 
       {/* Actions row */}
       {hasActions && (

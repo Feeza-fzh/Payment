@@ -348,6 +348,46 @@ Not done, and why
 Assumptions or questions
 - none
 
+## Task report
+
+Phase: 2
+Task: Downgrade to monthly reflection on plans and billing with period stacking
+
+PRD requirements met
+- [x] FR-4   Proration and plan change transitions
+- [x] FR-12  Billing screen displays active monthly plan after downgrade
+- [x] FR-15  Downgrade plan controls and banner messaging
+- [x] T13    Downgrade transition and plan reflection
+- [x] G1     Correct access entitlement reflection across routes
+
+Rules checked
+- [x] P-9    Decide access with effectivePlan(); reflects current active plan
+- [x] P-10   Preserve full paid period duration and stack purchased month
+- [x] S-1    All payment-mutating logic in src/server
+- [x] S-6    Time fetched via Clock abstraction
+
+Commands run
+- typecheck: pass (0 errors)
+- lint:      pass (0 errors, 0 warnings)
+- test:      pass (43 passed, 0 failed across 9 test files)
+- build:     pass (0 errors, Turbopack production build succeeded)
+
+Files changed
+- src/server/payments/initiateCheckout.ts: Quoted period calculation for yearly-to-monthly downgrade stacks 1 month onto currentPeriodEnd
+- src/server/payments/fulfillEntitlement.ts: Updates plan to MONTHLY immediately while preserving stacked periodEnd and cycle start
+- src/app/billing/page.tsx: Computes isDowngradedToMonthly using Clock abstraction and passes to BillingManager
+- src/components/billing/BillingManager.tsx: Displays Monthly plan, 5s auto-dismissing downgrade notice, and Free plan handling
+- src/components/billing/BillingManager.module.css: Styles for Free plan badges and CTA
+- src/components/plans/PlanCard.tsx: Dynamic CTA labels ("Upgrade", "Downgrade to monthly", "Current plan")
+- src/components/plans/PlanCard.module.css: Hover and active effects for secondary action buttons
+- tests/unit/lifecycle.test.ts: Added test for yearly-to-monthly downgrade period stacking and plan update
+
+Not done, and why
+- none
+
+Assumptions or questions
+- none
+
 
 
 

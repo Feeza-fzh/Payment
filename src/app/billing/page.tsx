@@ -4,6 +4,7 @@ import BillingManager from "@/components/billing/BillingManager";
 import { getCurrentUser } from "@/server/identity/getCurrentUser";
 import { effectivePlan } from "@/server/identity/effectivePlan";
 import { formatKoboToNaira } from "@/server/payments/money";
+import { getClock } from "@/server/clock";
 
 export const metadata: Metadata = {
   title: "Billing — SubSlice",
@@ -22,46 +23,60 @@ export default async function BillingPage(): Promise<React.ReactElement> {
   const email = user?.email ?? "ada@example.com";
   const sub = user?.subscription;
 
-  const planTier = (sub?.plan?.tier ?? currentPlan) as
-    | "FREE"
-    | "MONTHLY"
-    | "YEARLY";
-  const status = (sub?.status ?? "ACTIVE") as "ACTIVE" | "PAST_DUE" | "ENDED";
+  const isFree = currentPlan === "FREE";
+  const planTier = isFree
+    ? "FREE"
+    : ((sub?.plan?.tier ?? currentPlan) as "FREE" | "MONTHLY" | "YEARLY");
+  const status = isFree
+    ? "ACTIVE"
+    : ((sub?.status ?? "ACTIVE") as "ACTIVE" | "PAST_DUE" | "ENDED");
 
-  const periodEndFormatted = sub?.currentPeriodEnd
-    ? sub.currentPeriodEnd.toLocaleDateString("en-NG", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        timeZone: "UTC",
-      })
-    : "—";
+  const periodEndFormatted =
+    !isFree && sub?.currentPeriodEnd
+      ? sub.currentPeriodEnd.toLocaleDateString("en-NG", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          timeZone: "UTC",
+        })
+      : "—";
 
-  const graceEndsAtFormatted = sub?.graceEndsAt
-    ? sub.graceEndsAt.toLocaleDateString("en-NG", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        timeZone: "UTC",
-      })
-    : null;
+  const graceEndsAtFormatted =
+    !isFree && sub?.graceEndsAt
+      ? sub.graceEndsAt.toLocaleDateString("en-NG", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          timeZone: "UTC",
+        })
+      : null;
 
-  const canceledAtFormatted = sub?.canceledAt
-    ? sub.canceledAt.toLocaleDateString("en-NG", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        timeZone: "UTC",
-      })
-    : null;
+  const canceledAtFormatted =
+    !isFree && sub?.canceledAt
+      ? sub.canceledAt.toLocaleDateString("en-NG", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          timeZone: "UTC",
+        })
+      : null;
 
-  const nextChargeAmount = sub
-    ? sub.pendingPlan
-      ? sub.pendingPlan.amountMinor
-      : sub.plan.amountMinor
-    : 0;
+  const nextChargeAmount =
+    !isFree && sub
+      ? sub.pendingPlan
+        ? sub.pendingPlan.amountMinor
+        : sub.plan.amountMinor
+      : 0;
 
   const nextChargeFormatted = `₦${formatKoboToNaira(nextChargeAmount)}`;
+
+  const isDowngradedToMonthly =
+    !isFree &&
+    sub?.plan?.tier === "MONTHLY" &&
+    Boolean(
+      sub.currentPeriodEnd &&
+      sub.currentPeriodEnd.getTime() - getClock().nowMs() > 35 * 24 * 60 * 60 * 1000
+    );
 
   return (
     <>
@@ -88,6 +103,7 @@ export default async function BillingPage(): Promise<React.ReactElement> {
           canceledAtFormatted={canceledAtFormatted}
           pendingPlanTier={sub?.pendingPlan?.tier ?? null}
           graceEndsAtFormatted={graceEndsAtFormatted}
+          downgradedToMonthly={isDowngradedToMonthly}
         />
       </main>
     </>

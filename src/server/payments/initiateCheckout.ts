@@ -98,6 +98,17 @@ export async function initiateCheckout(params: {
       user.subscription.status === SubscriptionStatus.PAST_DUE) &&
     user.subscription.plan.tier === params.planTier;
 
+  // A user on YEARLY who wants to downgrade to MONTHLY:
+  // The month is stacked onto currentPeriodEnd (extending the period by 1 month).
+  const isYearlyToMonthlyDowngrade =
+    !isMonthlyToYearlyUpgrade &&
+    !isSamePlanRenew &&
+    user.subscription &&
+    (user.subscription.status === SubscriptionStatus.ACTIVE ||
+      user.subscription.status === SubscriptionStatus.PAST_DUE) &&
+    user.subscription.plan.tier === "YEARLY" &&
+    params.planTier === "MONTHLY";
+
   if (isMonthlyToYearlyUpgrade && user.subscription) {
     kind = CheckoutKind.UPGRADE;
     const quote = calculateProration({
@@ -121,6 +132,12 @@ export async function initiateCheckout(params: {
         ? addOneYearClamped(user.subscription.currentPeriodEnd)
         : addOneMonthClamped(user.subscription.currentPeriodEnd);
     amountMinor = plan.amountMinor;
+  } else if (isYearlyToMonthlyDowngrade && user.subscription) {
+    // Stacking 1 month to the existing yearly plan end date
+    kind = CheckoutKind.RENEWAL;
+    quotedPeriodStart = user.subscription.currentPeriodEnd;
+    quotedPeriodEnd = addOneMonthClamped(user.subscription.currentPeriodEnd);
+    amountMinor = plan.amountMinor;
   } else {
     amountMinor = plan.amountMinor;
   }
@@ -136,7 +153,11 @@ export async function initiateCheckout(params: {
     },
   });
 
-  if (existing && existing.paymentLink) {
+  if (
+    existing &&
+    existing.paymentLink &&
+    (!existing.quotedPeriodEnd || existing.quotedPeriodEnd.getTime() === quotedPeriodEnd.getTime())
+  ) {
     return { ok: true, checkoutUrl: existing.paymentLink };
   }
 

@@ -73,7 +73,7 @@ function ctaLabel(cta: PlanCta): string {
     case "downgrade-to-free":
       return "Downgrade to free";
     case "switch-to-monthly":
-      return "Switch to monthly";
+      return "Downgrade to monthly";
     case "scheduled":
       return cta.label;
     case "pay-now":

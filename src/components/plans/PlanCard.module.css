@@ -154,7 +154,7 @@
   border: none;
   cursor: pointer;
   text-align: center;
-  transition: opacity 0.2s ease, box-shadow 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   display: block;
   width: 100%;
 }
@@ -175,7 +175,15 @@
 }
 
 .ctaSecondary:hover {
-  opacity: 0.85;
+  background: var(--primitive-color-primary-80, #debaf7);
+  color: var(--primitive-color-primary-20, #3a0a5c);
+  box-shadow: var(--shadow-soft);
+  transform: translateY(-1px);
+}
+
+.ctaSecondary:active {
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 .ctaCurrent {

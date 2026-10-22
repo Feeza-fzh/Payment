@@ -183,6 +183,21 @@ export async function fulfillEntitlement(
         }
       }
 
+      // Stacking logic for yearly-to-monthly downgrade:
+      // The plan reflects as MONTHLY immediately on plans and billing,
+      // and the purchased month is stacked onto currentPeriodEnd.
+      const effectivePeriodStart =
+        currentSub &&
+        currentSub.status === SubscriptionStatus.ACTIVE &&
+        currentSub.currentPeriodStart <= now &&
+        session.kind === CheckoutKind.RENEWAL
+          ? currentSub.currentPeriodStart
+          : periodStart;
+
+      const finalPlanId = appliedPlanId;
+      const finalPlanTier = appliedPlanTier;
+      const finalPendingPlanId = null;
+
       // 1. Write FULFILMENT PaymentLog row (Rule P-15, P-17)
       await writePaymentLog(
         {
@@ -206,7 +221,7 @@ export async function fulfillEntitlement(
         where: { userId: session.userId },
         create: {
           userId: session.userId,
-          planId: appliedPlanId,
+          planId: finalPlanId,
           status: SubscriptionStatus.ACTIVE,
           currentPeriodStart: periodStart,
           currentPeriodEnd: periodEnd,
@@ -217,13 +232,13 @@ export async function fulfillEntitlement(
           currency: payment.currency,
         },
         update: {
-          planId: appliedPlanId,
+          planId: finalPlanId,
           status: SubscriptionStatus.ACTIVE,
-          currentPeriodStart: periodStart,
+          currentPeriodStart: effectivePeriodStart,
           currentPeriodEnd: periodEnd,
           cancelAtPeriodEnd: keepCancelFlag,
           canceledAt: keepCancelFlag ? canceledAt : null,
-          pendingPlanId: null,
+          pendingPlanId: finalPendingPlanId,
           graceEndsAt: null,
           ...(encryptedToken ? { cardTokenEncrypted: encryptedToken } : {}),
           lastAmountMinor: payment.amountMinor,
@@ -235,7 +250,7 @@ export async function fulfillEntitlement(
       await Promise.all([
         tx.user.update({
           where: { id: session.userId },
-          data: { plan: appliedPlanTier },
+          data: { plan: finalPlanTier },
         }),
         tx.checkoutSession.update({
           where: { id: session.id },
@@ -257,7 +272,7 @@ export async function fulfillEntitlement(
       return {
         ok: true,
         outcome: fulfillOutcome,
-        plan: appliedPlanTier,
+        plan: finalPlanTier,
       };
     },
     {
